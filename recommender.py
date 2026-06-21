@@ -141,6 +141,18 @@ SUB_DPS_OUTPUT_TAGS = {
     "defense_down",
 }
 ALLY_TARGET_PATTERNS = ("我方", "除自身外", "前锋学生", "后援学生", "召唤物")
+ENEMY_TARGET_PATTERNS = ("敌方", "敌人", "目标")
+ATTRIBUTE_ENHANCE_KEYWORDS = {
+    "explosive": ("EnhanceExplosionRate", "爆发特效增伤"),
+    "piercing": ("EnhancePierceRate", "贯通特效增伤"),
+    "mystic": ("EnhanceMysticRate", "神秘特效增伤"),
+    "sonic": ("EnhanceSonicRate", "振动特效增伤"),
+}
+SELF_HARM_PATTERNS = (
+    "造成自身生命值上限",
+    "自身生命值不高于1%",
+    "立即退场",
+)
 SUSTAINED_DAMAGE_PATTERNS = (
     "普通攻击时",
     "自身攻击时",
@@ -160,6 +172,19 @@ SUSTAINED_EX_MODE_PATTERNS = (
     "无视每",
     "开火间隔",
 )
+
+
+def get_team_slot_order(selected_characters: list[dict[str, Any]] | None = None) -> list[str]:
+    """返回当前队伍骨架的补位顺序。
+
+    普通推图默认先补坦克、主 C、副 C、辅助、治疗；如果核心角色有自损或
+    低血量退场风险，治疗提前，避免新手只追输出导致队伍不稳定。
+    """
+    order = TEAM_SLOT_ORDER.copy()
+    if selected_characters and any(needs_survival_support(character) for character in selected_characters):
+        order.remove("healer")
+        order.insert(1, "healer")
+    return order
 
 
 def load_characters(json_path: str | Path) -> list[dict[str, Any]]:
@@ -249,6 +274,11 @@ def is_ally_effect_text(text: str) -> bool:
     return contains_any(text, ALLY_TARGET_PATTERNS)
 
 
+def is_enemy_effect_text(text: str) -> bool:
+    """判断技能文本是否明显作用于敌方。"""
+    return contains_any(text, ENEMY_TARGET_PATTERNS)
+
+
 def ally_skill_texts(character: dict[str, Any]) -> list[str]:
     """返回所有作用于我方队友的技能文本片段。"""
     return [
@@ -258,9 +288,23 @@ def ally_skill_texts(character: dict[str, Any]) -> list[str]:
     ]
 
 
+def enemy_skill_texts(character: dict[str, Any]) -> list[str]:
+    """返回所有作用于敌方的技能文本片段。"""
+    return [
+        str(text)
+        for text in character.get("skills", {}).values()
+        if is_enemy_effect_text(str(text))
+    ]
+
+
 def ally_text_has(character: dict[str, Any], *keywords: str) -> bool:
     """判断候选角色是否有作用于我方的指定关键词组合。"""
     return any(all(keyword in text for keyword in keywords) for text in ally_skill_texts(character))
+
+
+def enemy_text_has(character: dict[str, Any], *keywords: str) -> bool:
+    """判断候选角色是否有作用于敌方的指定关键词组合。"""
+    return any(all(keyword in text for keyword in keywords) for text in enemy_skill_texts(character))
 
 
 def ally_text_max_duration(character: dict[str, Any], *keywords: str) -> float:
@@ -271,6 +315,75 @@ def ally_text_max_duration(character: dict[str, Any], *keywords: str) -> float:
         if all(keyword in text for keyword in keywords)
     ]
     return max(durations) if durations else 0
+
+
+def provides_ally_tag(character: dict[str, Any], tag: str) -> bool:
+    """判断一个标签是否真能服务队友，而不是只强化自己。
+
+    角色数据里的 tags 有些来自技能全文自动推断；如果不看作用对象，
+    自身减费、自身攻击提升也会被误当成辅助能力。
+    """
+    candidate_tags = set(character.get("tags", []))
+    if tag not in candidate_tags:
+        return False
+
+    if tag == "atk_buff":
+        return ally_text_has(character, "攻击力增加")
+    if tag == "crit_buff":
+        return (
+            ally_text_has(character, "暴击值增加")
+            or ally_text_has(character, "暴击伤害增加")
+        )
+    if tag == "cost_reduction":
+        return ally_text_has(character, "CostChange减少")
+    if tag == "cost_recovery":
+        return ally_text_has(character, "费用恢复力增加")
+    if tag == "shield":
+        return ally_text_has(character, "Shield") or ally_text_has(character, "护盾")
+    if tag == "healing":
+        return character.get("role") == "healer" or ally_text_has(character, "回复")
+    if tag in {"single_target_buff", "aoe_buff", "support_utility"}:
+        return bool(ally_skill_texts(character)) or character.get("role") in {"support", "healer"}
+    return True
+
+
+def get_matching_attribute_enhance(
+    selected: dict[str, Any],
+    candidate: dict[str, Any],
+) -> tuple[str, str] | None:
+    """寻找候选角色是否给队友提供了主 C 对应攻击属性的特效增伤。"""
+    keyword_label = ATTRIBUTE_ENHANCE_KEYWORDS.get(selected.get("attack_type"))
+    if not keyword_label:
+        return None
+
+    keyword, label = keyword_label
+    if ally_text_has(candidate, keyword):
+        return keyword, label
+    return None
+
+
+def needs_survival_support(character: dict[str, Any]) -> bool:
+    """判断角色是否有自损、低血量倒计时等推图容错需求。"""
+    return contains_any(get_all_skill_text(character), SELF_HARM_PATTERNS)
+
+
+def support_tag_reason_applies(character: dict[str, Any], tag: str) -> bool:
+    """判断某个辅助标签是否适合写进推荐理由。"""
+    if tag in {
+        "atk_buff",
+        "crit_buff",
+        "cost_recovery",
+        "cost_reduction",
+        "healing",
+        "shield",
+        "single_target_buff",
+        "aoe_buff",
+        "support_utility",
+    }:
+        return provides_ally_tag(character, tag)
+    if tag in {"defense_down", "attack_down", "crowd_control"}:
+        return tag in set(character.get("tags", []))
+    return tag in set(character.get("tags", []))
 
 
 def classify_damage_profile(character: dict[str, Any]) -> dict[str, Any]:
@@ -370,16 +483,20 @@ def score_ex_burst_support(
     """给 EX 爆发型主 C 匹配短窗口、费用和 EX 相关辅助。"""
     score = 0
     reasons: list[str] = []
-    candidate_tags = set(candidate.get("tags", []))
-    all_text = get_all_skill_text(candidate)
 
-    if "cost_reduction" in candidate_tags or "CostChange减少" in all_text:
+    if ally_text_has(candidate, "CostChange减少"):
         score += 4
         reasons.append("所选主 C 偏 EX 爆发，候选角色能降低 EX 费用，能更快打出关键技能。")
 
-    if "cost_recovery" in candidate_tags or "费用恢复力增加" in all_text:
+    if ally_text_has(candidate, "费用恢复力增加"):
         score += 2
         reasons.append("EX 爆发型主 C 吃技能循环，候选角色能提高费用恢复，帮助更快回到爆发窗口。")
+
+    attribute_enhance = get_matching_attribute_enhance(selected, candidate)
+    if attribute_enhance:
+        _, label = attribute_enhance
+        score += 5
+        reasons.append(f"候选角色能给队友提供{label}，这是技能文本里的对口增伤，能直接抬高该主 C 的输出。")
 
     if ally_text_has(candidate, "攻击力增加"):
         duration = ally_text_max_duration(candidate, "攻击力增加")
@@ -397,16 +514,22 @@ def score_ex_burst_support(
         score += 2
         reasons.append("候选角色能提高暴击伤害，适合配合高倍率 EX 打爆发。")
 
-    if "EnhanceExDamageRate" in all_text or ("EX技能" in all_text and "伤害" in all_text and "增加" in all_text):
+    if ally_text_has(candidate, "EnhanceExDamageRate") or any(
+        "EX技能" in text and "伤害" in text and "增加" in text
+        for text in ally_skill_texts(candidate)
+    ):
         score += 4
         reasons.append("候选角色技能文本带有 EX 伤害强化，能直接服务 EX 型主 C。")
 
-    if "defense_down" in candidate_tags:
+    if "defense_down" in set(candidate.get("tags", [])) or enemy_text_has(candidate, "防御力减少"):
         score += 2
         reasons.append("候选角色能降低敌方防御，适合在 EX 爆发前铺垫。")
 
-    if "shield" in candidate_tags and (
-        {"cost_reduction", "crit_buff", "atk_buff"} & candidate_tags
+    if provides_ally_tag(candidate, "shield") and (
+        provides_ally_tag(candidate, "cost_reduction")
+        or provides_ally_tag(candidate, "crit_buff")
+        or provides_ally_tag(candidate, "atk_buff")
+        or attribute_enhance
     ):
         score += 1
         reasons.append("候选角色还带护盾或保护能力，可以让主 C 在爆发前后更稳定。")
@@ -453,14 +576,20 @@ def score_sustained_support(
         else:
             score += 1
 
-    if "defense_down" in candidate_tags and contains_any(
+    attribute_enhance = get_matching_attribute_enhance(selected, candidate)
+    if attribute_enhance:
+        _, label = attribute_enhance
+        score += 4
+        reasons.append(f"候选角色能提供{label}，适合让普攻/小技能的多段伤害持续受益。")
+
+    if ("defense_down" in candidate_tags or enemy_text_has(candidate, "防御力减少")) and contains_any(
         get_skill_text(selected, "normal") + get_skill_text(selected, "sub"),
         SUSTAINED_DAMAGE_PATTERNS,
     ):
         score += 2
         reasons.append("所选主 C 的普通技能/子技能会持续出伤，防御降低能让这些多段伤害更稳定受益。")
 
-    if "cost_reduction" in candidate_tags:
+    if provides_ally_tag(candidate, "cost_reduction"):
         score += 1
         reasons.append("候选角色能降低费用压力，但对持续输出主 C 来说优先级低于攻速和长时间暴击增益。")
 
@@ -481,6 +610,14 @@ def score_pair(
 
     selected_tags = set(selected["tags"])
     candidate_tags = set(candidate["tags"])
+
+    if needs_survival_support(selected):
+        if provides_ally_tag(candidate, "healing"):
+            score += 5
+            reasons.append("所选角色技能带自损或低血量退场风险，推图时治疗能显著提高稳定性。")
+        if provides_ally_tag(candidate, "shield"):
+            score += 2
+            reasons.append("所选角色有额外生存压力，候选角色的护盾可以降低自损后的翻车风险。")
 
     # 先分析主 C 的出伤方式，再匹配不同类型的辅助。
     if selected["role"] in {"main_dps", "sub_dps"}:
@@ -503,8 +640,8 @@ def score_pair(
                 score += sustained_score
                 reasons.extend(sustained_reasons)
 
-    # 规则 1：主输出很吃攻击力提升。
-    if selected["role"] == "main_dps" and "atk_buff" in candidate_tags:
+    # 规则 1：主输出很吃攻击力提升，但必须确认增益是给队友的。
+    if selected["role"] == "main_dps" and provides_ally_tag(candidate, "atk_buff"):
         score += 2
         reasons.append("所选角色是主输出，候选角色能提供攻击提升，可以直接放大核心伤害。")
 
@@ -526,25 +663,25 @@ def score_pair(
         reasons.append("所选角色偏功能位，候选角色是输出定位，可以补足队伍的伤害来源。")
 
     # 规则 2：主输出也常常需要暴击相关强化来提高爆发上限。
-    if selected["role"] == "main_dps" and "crit_buff" in candidate_tags:
+    if selected["role"] == "main_dps" and provides_ally_tag(candidate, "crit_buff"):
         score += 3
         reasons.append("所选角色是主输出，候选角色能提供暴击强化，适合配合爆发输出窗口。")
 
     # 规则 3：高费用角色需要费用恢复或费用降低来改善技能循环。
     if "high_cost" in selected_tags:
-        if "cost_reduction" in candidate_tags:
+        if provides_ally_tag(candidate, "cost_reduction"):
             score += 3
             reasons.append("所选角色 EX 费用较高，候选角色能降低费用压力，让关键技能更容易释放。")
-        if "cost_recovery" in candidate_tags:
+        if provides_ally_tag(candidate, "cost_recovery"):
             score += 3
             reasons.append("所选角色 EX 费用较高，候选角色能提高费用恢复，帮助队伍更快进入技能循环。")
 
     # 规则 4：较脆角色需要治疗或护盾提高容错率。
     if "fragile" in selected_tags:
-        if "healing" in candidate_tags:
+        if provides_ally_tag(candidate, "healing"):
             score += 2
             reasons.append("所选角色生存压力较大，候选角色能治疗队友，提高站场稳定性。")
-        if "shield" in candidate_tags:
+        if provides_ally_tag(candidate, "shield"):
             score += 2
             reasons.append("所选角色生存压力较大，候选角色能提供护盾，降低被击倒风险。")
 
@@ -577,7 +714,7 @@ def score_pair(
 
     # 即使某些辅助标签没有触发加分，也补充自然语言解释，帮助新手读懂技能价值。
     for tag, reason in SUPPORT_TAG_REASON.items():
-        if tag in candidate_tags and reason not in reasons:
+        if support_tag_reason_applies(candidate, tag) and reason not in reasons:
             reasons.append(reason)
 
     if not reasons:
@@ -663,7 +800,17 @@ def score_sub_dps_fit(
     if candidate_role not in {"main_dps", "support"}:
         return 0
 
-    has_enabler = bool(candidate_tags & SUB_DPS_ENABLER_TAGS)
+    has_team_buff = any(
+        provides_ally_tag(candidate, tag)
+        for tag in SUB_DPS_ENABLER_TAGS
+        if tag != "defense_down"
+    )
+    has_defense_down = "defense_down" in candidate_tags or enemy_text_has(candidate, "防御力减少")
+    has_attribute_enhance = any(
+        get_matching_attribute_enhance(main_dps, candidate)
+        for main_dps in main_dps_characters
+    )
+    has_enabler = has_team_buff or has_defense_down or has_attribute_enhance
     has_output = (
         candidate_role == "main_dps"
         or bool(candidate_tags & SUB_DPS_OUTPUT_TAGS)
@@ -679,16 +826,19 @@ def score_sub_dps_fit(
 
     for main_dps in main_dps_characters:
         main_tags = set(main_dps.get("tags", []))
-        if "atk_buff" in candidate_tags:
+        if provides_ally_tag(candidate, "atk_buff"):
             score += 2
-        if "crit_buff" in candidate_tags:
+        if provides_ally_tag(candidate, "crit_buff"):
             score += 2
-        if "defense_down" in candidate_tags and (
+        if get_matching_attribute_enhance(main_dps, candidate):
+            score += 3
+        if has_defense_down and (
             main_tags & {"burst_damage", "single_target_damage"}
         ):
             score += 2
         if "high_cost" in main_tags and (
-            candidate_tags & {"cost_recovery", "cost_reduction"}
+            provides_ally_tag(candidate, "cost_recovery")
+            or provides_ally_tag(candidate, "cost_reduction")
         ):
             score += 2
 
@@ -738,6 +888,7 @@ def build_team_role_plan(selected_characters: list[dict[str, Any]]) -> dict[str,
         "support": "support" in selected_roles,
         "healer": "healer" in selected_roles,
     }
+    slot_order = get_team_slot_order(selected_characters)
 
     covered = [
         {
@@ -745,7 +896,7 @@ def build_team_role_plan(selected_characters: list[dict[str, Any]]) -> dict[str,
             "label": TEAM_SLOT_LABELS[slot_role],
             "help": TEAM_SLOT_HELP[slot_role],
         }
-        for slot_role in TEAM_SLOT_ORDER
+        for slot_role in slot_order
         if covered_slots[slot_role]
     ]
     missing = [
@@ -754,7 +905,7 @@ def build_team_role_plan(selected_characters: list[dict[str, Any]]) -> dict[str,
             "label": TEAM_SLOT_LABELS[slot_role],
             "help": TEAM_SLOT_HELP[slot_role],
         }
-        for slot_role in TEAM_SLOT_ORDER
+        for slot_role in slot_order
         if not covered_slots[slot_role]
     ]
 
@@ -765,7 +916,7 @@ def build_team_role_plan(selected_characters: list[dict[str, Any]]) -> dict[str,
                 "label": TEAM_SLOT_LABELS[slot_role],
                 "help": TEAM_SLOT_HELP[slot_role],
             }
-            for slot_role in TEAM_SLOT_ORDER
+            for slot_role in slot_order
         ],
         "covered": covered,
         "missing": missing,
@@ -816,6 +967,15 @@ def explain_team_slot_pick(
 
     if slot_role == "sub_dps":
         return describe_sub_dps_value(candidate, team_context or [])
+
+    if slot_role == "healer" and any(
+        needs_survival_support(character)
+        for character in (team_context or [])
+    ):
+        return (
+            "队伍当前缺少“治疗”位，而且核心角色有自损或低血量退场风险；"
+            "候选角色可以提供回复，优先保证普通推图稳定性。"
+        )
 
     return f"队伍当前缺少“{slot_label}”位，候选角色可以补齐这个关键职责：{base_reason}"
 

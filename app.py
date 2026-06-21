@@ -293,7 +293,7 @@ def render_missing_summary(box_result: dict) -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="碧蓝档案配队推荐器",
+        page_title="碧蓝档案推图配队推荐器",
         page_icon="🎯",
         layout="wide",
     )
@@ -427,9 +427,9 @@ def main() -> None:
     if "owned_names" not in st.session_state:
         st.session_state["owned_names"] = []
 
-    st.markdown("<div class='app-title'>碧蓝档案配队推荐器</div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-title'>碧蓝档案推图配队推荐器</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='app-subtitle'>选择一个或多个核心角色，查看适合的新手向队友推荐和规则解释。</div>",
+        "<div class='app-subtitle'>选择一个或多个核心角色，查看适合普通推图的新手向队友推荐和规则解释。</div>",
         unsafe_allow_html=True,
     )
     st.caption(
