@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -139,6 +140,26 @@ SUB_DPS_OUTPUT_TAGS = {
     "burst_damage",
     "defense_down",
 }
+ALLY_TARGET_PATTERNS = ("我方", "除自身外", "前锋学生", "后援学生", "召唤物")
+SUSTAINED_DAMAGE_PATTERNS = (
+    "普通攻击时",
+    "自身攻击时",
+    "每进行",
+    "弹匣弹药耗尽",
+    "立即换弹",
+    "攻击速度增加",
+    "开火间隔",
+    "追加伤害",
+)
+SUSTAINED_EX_MODE_PATTERNS = (
+    "强化：普通攻击",
+    "普通攻击倍率",
+    "全自动射击",
+    "精密瞄准",
+    "指定射击姿势",
+    "无视每",
+    "开火间隔",
+)
 
 
 def load_characters(json_path: str | Path) -> list[dict[str, Any]]:
@@ -183,6 +204,269 @@ def find_characters(
     return [find_character(characters, name) for name in names]
 
 
+def get_skill_text(character: dict[str, Any], skill_name: str) -> str:
+    """读取指定技能文本，缺失时返回空字符串。"""
+    return str(character.get("skills", {}).get(skill_name, "") or "")
+
+
+def get_all_skill_text(character: dict[str, Any]) -> str:
+    """把角色全部技能文本合并，便于做规则判断。"""
+    return " ".join(str(text) for text in character.get("skills", {}).values())
+
+
+def contains_any(text: str, patterns: tuple[str, ...] | set[str]) -> bool:
+    """判断文本是否包含任意一个关键词。"""
+    return any(pattern in text for pattern in patterns)
+
+
+def extract_durations(text: str) -> list[float]:
+    """从技能文本中提取“持续 X 秒”的时间。"""
+    return [float(value) for value in re.findall(r"持续(\d+(?:\.\d+)?)秒", text)]
+
+
+def max_duration(text: str) -> float:
+    """返回文本中最长持续时间，缺失时为 0。"""
+    durations = extract_durations(text)
+    return max(durations) if durations else 0
+
+
+def extract_damage_multipliers(text: str) -> list[float]:
+    """粗略提取“造成自身攻击力 X%”一类伤害倍率。"""
+    multipliers = []
+    for match in re.finditer(r"造成[^\n。；;]{0,100}?自身攻击力(\d+(?:\.\d+)?)%", text):
+        multipliers.append(float(match.group(1)))
+    return multipliers
+
+
+def max_damage_multiplier(text: str) -> float:
+    """返回文本中最高的攻击力伤害倍率。"""
+    multipliers = extract_damage_multipliers(text)
+    return max(multipliers) if multipliers else 0
+
+
+def is_ally_effect_text(text: str) -> bool:
+    """判断技能文本是否明显作用于我方队友，而不是纯自我强化。"""
+    return contains_any(text, ALLY_TARGET_PATTERNS)
+
+
+def ally_skill_texts(character: dict[str, Any]) -> list[str]:
+    """返回所有作用于我方队友的技能文本片段。"""
+    return [
+        str(text)
+        for text in character.get("skills", {}).values()
+        if is_ally_effect_text(str(text))
+    ]
+
+
+def ally_text_has(character: dict[str, Any], *keywords: str) -> bool:
+    """判断候选角色是否有作用于我方的指定关键词组合。"""
+    return any(all(keyword in text for keyword in keywords) for text in ally_skill_texts(character))
+
+
+def ally_text_max_duration(character: dict[str, Any], *keywords: str) -> float:
+    """找到包含指定关键词的我方技能里最长的持续时间。"""
+    durations = [
+        max_duration(text)
+        for text in ally_skill_texts(character)
+        if all(keyword in text for keyword in keywords)
+    ]
+    return max(durations) if durations else 0
+
+
+def classify_damage_profile(character: dict[str, Any]) -> dict[str, Any]:
+    """根据技能文本判断输出核心更偏 EX 爆发还是普攻/小技能持续输出。"""
+    if character.get("role") not in {"main_dps", "sub_dps"}:
+        return {
+            "style": "utility",
+            "label": "功能位",
+            "ex_score": 0,
+            "sustained_score": 0,
+            "reasons": ["非主要输出定位。"],
+        }
+
+    tags = set(character.get("tags", []))
+    ex_cost = character.get("ex_cost") or 0
+    ex_text = get_skill_text(character, "ex")
+    normal_text = get_skill_text(character, "normal")
+    passive_text = get_skill_text(character, "passive")
+    sub_text = get_skill_text(character, "sub")
+    non_ex_text = " ".join([normal_text, passive_text, sub_text])
+    all_text = get_all_skill_text(character)
+    ex_multiplier = max_damage_multiplier(ex_text)
+    normal_multiplier = max_damage_multiplier(non_ex_text)
+
+    ex_score = 0
+    sustained_score = 0
+    reasons: list[str] = []
+
+    if "造成" in ex_text:
+        ex_score += 1
+    if ex_multiplier >= 700:
+        ex_score += 3
+        reasons.append(f"EX 技能最高倍率约 {ex_multiplier:g}%，有明显爆发伤害。")
+    elif ex_multiplier >= 500:
+        ex_score += 2
+        reasons.append(f"EX 技能倍率约 {ex_multiplier:g}%，偏向用 EX 打关键伤害。")
+    elif ex_multiplier >= 300:
+        ex_score += 1
+
+    if ex_cost >= 5:
+        ex_score += 2
+        reasons.append("EX 费用偏高，通常需要围绕关键释放窗口配队。")
+    elif ex_cost <= 3:
+        sustained_score += 1
+
+    if "high_cost" in tags:
+        ex_score += 1
+    if "burst_damage" in tags:
+        ex_score += 1
+    if "EnhanceExDamageRate" in all_text or "EX技能类型伤害" in all_text:
+        ex_score += 3
+        reasons.append("技能文本里出现 EX 伤害强化，说明 EX 伤害权重较高。")
+
+    if contains_any(non_ex_text, SUSTAINED_DAMAGE_PATTERNS):
+        sustained_score += 3
+        reasons.append("普通技能/子技能会围绕普攻、换弹、攻击速度或追加伤害持续触发。")
+    if contains_any(ex_text, SUSTAINED_EX_MODE_PATTERNS):
+        sustained_score += 3
+        reasons.append("EX 技能更像启动普攻强化模式，而不是单次爆发。")
+    if normal_multiplier >= 300:
+        sustained_score += 2
+        reasons.append(f"普通技能倍率约 {normal_multiplier:g}%，小技能出伤占比不低。")
+    elif normal_multiplier >= 180:
+        sustained_score += 1
+    if "攻击速度增加" in all_text and is_ally_effect_text(all_text) is False:
+        sustained_score += 1
+
+    if sustained_score >= ex_score + 2:
+        style = "sustained"
+        label = "普攻/小技能持续输出型"
+    elif ex_score >= sustained_score + 1:
+        style = "ex_burst"
+        label = "EX 爆发型"
+    else:
+        style = "mixed"
+        label = "混合输出型"
+
+    return {
+        "style": style,
+        "label": label,
+        "ex_score": ex_score,
+        "sustained_score": sustained_score,
+        "reasons": reasons or ["技能文本里 EX 与持续输出倾向接近，暂按混合输出处理。"],
+    }
+
+
+def label_damage_profile(character: dict[str, Any]) -> str:
+    """返回角色出伤类型的中文显示。"""
+    profile = classify_damage_profile(character)
+    return profile["label"]
+
+
+def score_ex_burst_support(
+    selected: dict[str, Any],
+    candidate: dict[str, Any],
+) -> tuple[int, list[str]]:
+    """给 EX 爆发型主 C 匹配短窗口、费用和 EX 相关辅助。"""
+    score = 0
+    reasons: list[str] = []
+    candidate_tags = set(candidate.get("tags", []))
+    all_text = get_all_skill_text(candidate)
+
+    if "cost_reduction" in candidate_tags or "CostChange减少" in all_text:
+        score += 4
+        reasons.append("所选主 C 偏 EX 爆发，候选角色能降低 EX 费用，能更快打出关键技能。")
+
+    if "cost_recovery" in candidate_tags or "费用恢复力增加" in all_text:
+        score += 2
+        reasons.append("EX 爆发型主 C 吃技能循环，候选角色能提高费用恢复，帮助更快回到爆发窗口。")
+
+    if ally_text_has(candidate, "攻击力增加"):
+        duration = ally_text_max_duration(candidate, "攻击力增加")
+        if duration and duration <= 20:
+            score += 4
+            reasons.append(f"候选角色有约 {duration:g} 秒攻击力增益，适合覆盖 EX 爆发窗口。")
+        else:
+            score += 2
+            reasons.append("候选角色能给我方提供攻击力提升，可以抬高 EX 伤害上限。")
+
+    if ally_text_has(candidate, "暴击值增加", "暴击伤害增加"):
+        score += 3
+        reasons.append("候选角色能同时提高暴击率和暴击伤害，适合在 EX 爆发前套给主 C。")
+    elif ally_text_has(candidate, "暴击伤害增加"):
+        score += 2
+        reasons.append("候选角色能提高暴击伤害，适合配合高倍率 EX 打爆发。")
+
+    if "EnhanceExDamageRate" in all_text or ("EX技能" in all_text and "伤害" in all_text and "增加" in all_text):
+        score += 4
+        reasons.append("候选角色技能文本带有 EX 伤害强化，能直接服务 EX 型主 C。")
+
+    if "defense_down" in candidate_tags:
+        score += 2
+        reasons.append("候选角色能降低敌方防御，适合在 EX 爆发前铺垫。")
+
+    if "shield" in candidate_tags and (
+        {"cost_reduction", "crit_buff", "atk_buff"} & candidate_tags
+    ):
+        score += 1
+        reasons.append("候选角色还带护盾或保护能力，可以让主 C 在爆发前后更稳定。")
+
+    return score, reasons
+
+
+def score_sustained_support(
+    selected: dict[str, Any],
+    candidate: dict[str, Any],
+) -> tuple[int, list[str]]:
+    """给普攻/小技能型主 C 匹配长时间暴击、攻速和持续增益。"""
+    score = 0
+    reasons: list[str] = []
+    candidate_tags = set(candidate.get("tags", []))
+
+    if ally_text_has(candidate, "攻击速度增加"):
+        duration = ally_text_max_duration(candidate, "攻击速度增加")
+        score += 4
+        if duration:
+            reasons.append(f"所选主 C 偏普攻/小技能输出，候选角色能提供约 {duration:g} 秒攻击速度提升，覆盖持续输出窗口。")
+        else:
+            reasons.append("所选主 C 偏普攻/小技能输出，候选角色能提供攻击速度提升，能增加持续出伤频率。")
+
+    crit_window_duration = max(
+        ally_text_max_duration(candidate, "暴击值增加", "暴击伤害增加"),
+        ally_text_max_duration(candidate, "暴击伤害增加"),
+    )
+    if ally_text_has(candidate, "暴击值增加", "暴击伤害增加"):
+        score += 4
+        if crit_window_duration:
+            reasons.append(f"候选角色能在约 {crit_window_duration:g} 秒内同时提高暴击率和暴击伤害，适合持续输出主 C 吃完整增益。")
+        else:
+            reasons.append("候选角色能同时提高暴击率和暴击伤害，适合普攻/小技能型主 C 持续输出。")
+    elif ally_text_has(candidate, "暴击伤害增加"):
+        score += 2
+        reasons.append("候选角色能提供暴击伤害增益，适合本身攻击频率较高的持续输出角色。")
+
+    if ally_text_has(candidate, "攻击力增加"):
+        duration = ally_text_max_duration(candidate, "攻击力增加")
+        if duration >= 25:
+            score += 3
+            reasons.append(f"候选角色有约 {duration:g} 秒攻击力增益，更适合覆盖普攻/小技能的持续输出时间。")
+        else:
+            score += 1
+
+    if "defense_down" in candidate_tags and contains_any(
+        get_skill_text(selected, "normal") + get_skill_text(selected, "sub"),
+        SUSTAINED_DAMAGE_PATTERNS,
+    ):
+        score += 2
+        reasons.append("所选主 C 的普通技能/子技能会持续出伤，防御降低能让这些多段伤害更稳定受益。")
+
+    if "cost_reduction" in candidate_tags:
+        score += 1
+        reasons.append("候选角色能降低费用压力，但对持续输出主 C 来说优先级低于攻速和长时间暴击增益。")
+
+    return score, reasons
+
+
 def score_pair(
     selected: dict[str, Any], candidate: dict[str, Any]
 ) -> tuple[int, list[str]]:
@@ -198,14 +482,35 @@ def score_pair(
     selected_tags = set(selected["tags"])
     candidate_tags = set(candidate["tags"])
 
+    # 先分析主 C 的出伤方式，再匹配不同类型的辅助。
+    if selected["role"] in {"main_dps", "sub_dps"}:
+        damage_profile = classify_damage_profile(selected)
+        if damage_profile["style"] == "ex_burst":
+            profile_score, profile_reasons = score_ex_burst_support(selected, candidate)
+            score += profile_score
+            reasons.extend(profile_reasons)
+        elif damage_profile["style"] == "sustained":
+            profile_score, profile_reasons = score_sustained_support(selected, candidate)
+            score += profile_score
+            reasons.extend(profile_reasons)
+        else:
+            ex_score, ex_reasons = score_ex_burst_support(selected, candidate)
+            sustained_score, sustained_reasons = score_sustained_support(selected, candidate)
+            if ex_score >= sustained_score:
+                score += ex_score
+                reasons.extend(ex_reasons)
+            else:
+                score += sustained_score
+                reasons.extend(sustained_reasons)
+
     # 规则 1：主输出很吃攻击力提升。
     if selected["role"] == "main_dps" and "atk_buff" in candidate_tags:
-        score += 3
+        score += 2
         reasons.append("所选角色是主输出，候选角色能提供攻击提升，可以直接放大核心伤害。")
 
     # 规则 1.1：完整名录里的很多角色还没有细分技能标签，因此先用职业做保守推荐。
     if selected["role"] == "main_dps" and candidate["role"] == "support":
-        score += 2
+        score += 1
         reasons.append("所选角色偏输出，候选角色是辅助定位，通常适合补足增益、减益或功能性。")
 
     if selected["role"] == "main_dps" and candidate["role"] == "healer":
@@ -252,15 +557,6 @@ def score_pair(
     if "single_target_damage" in selected_tags and "defense_down" in candidate_tags:
         score += 1
         reasons.append("所选角色偏单体输出，候选角色的防御降低能帮助打 Boss 或精英敌人。")
-
-    # 规则 7：相同攻击类型通常意味着更容易一起针对同一种敌方护甲。
-    if (
-        selected["attack_type"] != "unknown"
-        and selected["attack_type"] == candidate["attack_type"]
-    ):
-        score += 1
-        attack_label = ATTACK_TYPE_LABELS.get(selected["attack_type"], selected["attack_type"])
-        reasons.append(f"两名角色同为{attack_label}攻击，适合围绕同一种敌方护甲组队。")
 
     # 规则 8：Striker 输出搭配 Special 辅助，队伍位置更自然。
     if selected["position"] == "striker" and candidate["position"] == "special":
@@ -391,8 +687,6 @@ def score_sub_dps_fit(
             main_tags & {"burst_damage", "single_target_damage"}
         ):
             score += 2
-        if main_dps.get("attack_type") == candidate.get("attack_type"):
-            score += 1
         if "high_cost" in main_tags and (
             candidate_tags & {"cost_recovery", "cost_reduction"}
         ):

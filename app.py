@@ -18,6 +18,7 @@ from recommender import (
     label_armor_type,
     label_attack_type,
     label_battle_position,
+    label_damage_profile,
     label_position,
     label_role,
     load_characters,
@@ -100,6 +101,7 @@ def render_character_panel(character: dict) -> None:
         ("攻击", label_attack_type(character["attack_type"])),
         ("护甲", label_armor_type(character["armor_type"])),
         ("EX 费用", str(ex_cost)),
+        ("出伤类型", label_damage_profile(character)),
         ("GameKee 评分", format_gamekee_rating(character)),
     ]
     for row_start in range(0, len(stats), 2):
