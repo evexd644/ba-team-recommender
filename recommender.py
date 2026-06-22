@@ -20,12 +20,24 @@ ROLE_LABELS = {
     "healer": "治疗",
     "tank": "坦克",
 }
+ROLE_LABELS_EN = {
+    "main_dps": "Main DPS",
+    "sub_dps": "Sub DPS",
+    "support": "Support",
+    "healer": "Healer",
+    "tank": "Tank",
+}
 
 
 POSITION_LABELS = {
     "striker": "Striker 前排上场",
     "special": "Special 后排支援",
     "unknown": "待补充",
+}
+POSITION_LABELS_EN = {
+    "striker": "Striker",
+    "special": "Special",
+    "unknown": "TBD",
 }
 
 
@@ -34,6 +46,12 @@ BATTLE_POSITION_LABELS = {
     "middle": "中排",
     "back": "后排",
     "unknown": "待补充",
+}
+BATTLE_POSITION_LABELS_EN = {
+    "front": "Front",
+    "middle": "Middle",
+    "back": "Back",
+    "unknown": "TBD",
 }
 
 
@@ -44,6 +62,13 @@ ATTACK_TYPE_LABELS = {
     "sonic": "振动",
     "unknown": "待补充",
 }
+ATTACK_TYPE_LABELS_EN = {
+    "explosive": "Explosive",
+    "piercing": "Piercing",
+    "mystic": "Mystic",
+    "sonic": "Sonic",
+    "unknown": "TBD",
+}
 
 
 ARMOR_TYPE_LABELS = {
@@ -53,6 +78,14 @@ ARMOR_TYPE_LABELS = {
     "elastic": "弹力装甲",
     "composite": "复合装甲",
     "unknown": "待补充",
+}
+ARMOR_TYPE_LABELS_EN = {
+    "light": "Light Armor",
+    "heavy": "Heavy Armor",
+    "special": "Special Armor",
+    "elastic": "Elastic Armor",
+    "composite": "Composite Armor",
+    "unknown": "TBD",
 }
 
 
@@ -83,6 +116,32 @@ TAG_LABELS = {
     "support_utility": "辅助功能",
     "source_gamekee": "GameKee 数据",
 }
+TAG_LABELS_EN = {
+    "atk_buff": "ATK buff",
+    "crit_buff": "Crit buff",
+    "defense_down": "DEF down",
+    "attack_down": "ATK down",
+    "cost_recovery": "Cost recovery",
+    "cost_reduction": "Cost reduction",
+    "aoe_damage": "AoE damage",
+    "single_target_damage": "Single-target damage",
+    "shield": "Shield",
+    "healing": "Healing",
+    "crowd_control": "Crowd control",
+    "high_cost": "High cost",
+    "fragile": "Fragile",
+    "burst_damage": "Burst damage",
+    "low_cost": "Low cost",
+    "single_target_buff": "Single-target buff",
+    "aoe_buff": "AoE buff",
+    "reposition": "Reposition",
+    "self_healing": "Self-healing",
+    "frontline": "Frontline",
+    "taunt": "Taunt",
+    "damage": "Damage",
+    "support_utility": "Utility support",
+    "source_gamekee": "GameKee data",
+}
 
 
 SUPPORT_TAG_REASON = {
@@ -97,6 +156,18 @@ SUPPORT_TAG_REASON = {
     "crowd_control": "能控制敌人，为输出角色争取更稳定的输出时间。",
     "support_utility": "能承担辅助功能，适合补足输出角色以外的队伍职责。",
 }
+SUPPORT_TAG_REASON_EN = {
+    "atk_buff": "Provides an ATK buff, raising the damage ceiling for your DPS.",
+    "crit_buff": "Improves crit performance, which is useful for damage windows.",
+    "defense_down": "Lowers enemy DEF so the whole team can deal damage more reliably.",
+    "attack_down": "Lowers enemy ATK, improving safety in high-pressure stages.",
+    "cost_recovery": "Improves cost cycling, helping high-cost or frequent EX users feel smoother.",
+    "cost_reduction": "Reduces EX cost pressure and helps core skills come online faster.",
+    "healing": "Provides healing, improving survival for fragile units or frontliners.",
+    "shield": "Provides shields, reducing the risk of key units being knocked out.",
+    "crowd_control": "Can control enemies and buy more stable damage time for your DPS.",
+    "support_utility": "Covers utility duties beyond raw damage.",
+}
 
 
 # 新手向推荐先按“队伍职责”补齐一个基础骨架。
@@ -110,6 +181,13 @@ TEAM_SLOT_LABELS = {
     "support": "辅助",
     "healer": "治疗",
 }
+TEAM_SLOT_LABELS_EN = {
+    "tank": "Tank",
+    "main_dps": "Main DPS",
+    "sub_dps": "Sub DPS",
+    "support": "Support",
+    "healer": "Healer",
+}
 TEAM_SLOT_ACCEPTS = {
     "tank": {"tank"},
     "main_dps": {"main_dps", "sub_dps"},
@@ -122,6 +200,13 @@ TEAM_SLOT_HELP = {
     "sub_dps": "给主 C 提供对口增益，同时补一点输出、破防或清杂能力。",
     "support": "提供增益、减益或费用循环，让核心角色更容易打出价值。",
     "healer": "提供回复或容错，降低新手配队在高压关卡里的翻车率。",
+}
+TEAM_SLOT_HELP_EN = {
+    "tank": "Absorbs frontline pressure so DPS and supports can stay on the field safely.",
+    "main_dps": "Provides the team's main damage source so the lineup does not lack damage.",
+    "sub_dps": "Gives the Main DPS matching buffs while adding damage, DEF down, or wave clear.",
+    "support": "Provides buffs, debuffs, or cost cycling so the core units can do their job.",
+    "healer": "Adds healing and safety, lowering the chance of failed general stages.",
 }
 ROLE_COMPLETENESS_BONUS = 4
 SUB_DPS_ENABLER_TAGS = {
@@ -470,9 +555,16 @@ def classify_damage_profile(character: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def label_damage_profile(character: dict[str, Any]) -> str:
-    """返回角色出伤类型的中文显示。"""
+def label_damage_profile(character: dict[str, Any], lang: str = "zh") -> str:
+    """返回角色出伤类型显示。"""
     profile = classify_damage_profile(character)
+    if lang == "en":
+        return {
+            "utility": "Utility role",
+            "ex_burst": "EX burst DPS",
+            "sustained": "Basic/Normal skill DPS",
+            "mixed": "Hybrid DPS",
+        }.get(profile["style"], profile["label"])
     return profile["label"]
 
 
@@ -1240,31 +1332,217 @@ def explain_box_alternative(
     return "这是你当前 Box 中综合分数较高的可用队友，适合先作为过渡选择。"
 
 
-def format_tags(tags: list[str]) -> list[str]:
-    """把内部标签 key 转成中文标签。"""
-    return [TAG_LABELS.get(tag, tag) for tag in tags]
+REASON_TRANSLATIONS_EN = {
+    "非主要输出定位。": "This unit is not primarily a damage dealer.",
+    "技能文本里 EX 与持续输出倾向接近，暂按混合输出处理。": "The skill text has both EX-burst and sustained-damage signals, so this is treated as a hybrid DPS.",
+    "EX 费用偏高，通常需要围绕关键释放窗口配队。": "The EX cost is high, so the team usually needs to support key casting windows.",
+    "技能文本里出现 EX 伤害强化，说明 EX 伤害权重较高。": "The skill text includes EX damage enhancement, so EX damage is likely important.",
+    "普通技能/子技能会围绕普攻、换弹、攻击速度或追加伤害持续触发。": "The Normal/Sub skills keep triggering around basic attacks, reloads, attack speed, or extra damage.",
+    "EX 技能更像启动普攻强化模式，而不是单次爆发。": "The EX skill behaves more like a basic-attack enhancement mode than a single burst hit.",
+    "所选主 C 偏 EX 爆发，候选角色能降低 EX 费用，能更快打出关键技能。": "The selected DPS leans toward EX burst, and this candidate can reduce EX cost so key skills come out faster.",
+    "EX 爆发型主 C 吃技能循环，候选角色能提高费用恢复，帮助更快回到爆发窗口。": "EX-burst DPS units care about skill cycling; this candidate improves cost recovery and helps return to burst windows faster.",
+    "候选角色能给我方提供攻击力提升，可以抬高 EX 伤害上限。": "This candidate provides an ally ATK buff, raising the EX damage ceiling.",
+    "候选角色能同时提高暴击率和暴击伤害，适合在 EX 爆发前套给主 C。": "This candidate can raise both crit rate and crit damage, making them good to buff the Main DPS before an EX burst.",
+    "候选角色能提高暴击伤害，适合配合高倍率 EX 打爆发。": "This candidate boosts crit damage, which pairs well with high-multiplier EX burst damage.",
+    "候选角色技能文本带有 EX 伤害强化，能直接服务 EX 型主 C。": "This candidate has EX damage support in their skill text, directly helping EX-based DPS units.",
+    "候选角色能降低敌方防御，适合在 EX 爆发前铺垫。": "This candidate can lower enemy DEF, which is useful setup before an EX burst.",
+    "候选角色还带护盾或保护能力，可以让主 C 在爆发前后更稳定。": "This candidate also brings shielding or protection, making the Main DPS safer around burst windows.",
+    "所选主 C 偏普攻/小技能输出，候选角色能提供攻击速度提升，能增加持续出伤频率。": "The selected DPS leans on basic attacks or Normal skills, and this candidate can increase attack speed for more sustained damage ticks.",
+    "候选角色能同时提高暴击率和暴击伤害，适合普攻/小技能型主 C 持续输出。": "This candidate raises both crit rate and crit damage, which suits a basic-attack or Normal-skill DPS.",
+    "候选角色能提供暴击伤害增益，适合本身攻击频率较高的持续输出角色。": "This candidate provides crit damage, which suits sustained DPS units with frequent attacks.",
+    "所选主 C 的普通技能/子技能会持续出伤，防御降低能让这些多段伤害更稳定受益。": "The selected DPS keeps dealing damage through Normal/Sub skills, so DEF down helps those repeated hits more consistently.",
+    "候选角色能降低费用压力，但对持续输出主 C 来说优先级低于攻速和长时间暴击增益。": "This candidate reduces cost pressure, though sustained DPS units usually value attack speed and longer crit buffs more.",
+    "所选角色技能带自损或低血量退场风险，推图时治疗能显著提高稳定性。": "The selected unit has self-damage or low-HP retreat risk, so healing greatly improves stability in general stages.",
+    "所选角色有额外生存压力，候选角色的护盾可以降低自损后的翻车风险。": "The selected unit has extra survival pressure, and this candidate's shield reduces risk after self-damage.",
+    "所选角色是主输出，候选角色能提供攻击提升，可以直接放大核心伤害。": "The selected unit is the Main DPS, and this candidate's ATK buff directly increases core damage.",
+    "所选角色偏输出，候选角色是辅助定位，通常适合补足增益、减益或功能性。": "The selected unit is damage-focused, while this candidate is a support who can add buffs, debuffs, or utility.",
+    "输出角色需要稳定站场，治疗定位可以提高队伍容错率。": "Damage dealers need to stay on the field; a healer improves team safety.",
+    "候选角色是坦克定位，可以承担前排压力，让其他角色更安全地输出或辅助。": "This candidate is a tank and can absorb frontline pressure so other units can deal damage or support safely.",
+    "所选角色偏功能位，候选角色是输出定位，可以补足队伍的伤害来源。": "The selected unit is a utility role, and this candidate can supply the team's damage source.",
+    "所选角色是主输出，候选角色能提供暴击强化，适合配合爆发输出窗口。": "The selected unit is the Main DPS, and this candidate's crit support fits burst damage windows.",
+    "所选角色 EX 费用较高，候选角色能降低费用压力，让关键技能更容易释放。": "The selected unit has a high EX cost, and this candidate reduces cost pressure so key skills are easier to cast.",
+    "所选角色 EX 费用较高，候选角色能提高费用恢复，帮助队伍更快进入技能循环。": "The selected unit has a high EX cost, and this candidate improves cost recovery for faster skill cycling.",
+    "所选角色生存压力较大，候选角色能治疗队友，提高站场稳定性。": "The selected unit has survival pressure, and this candidate can heal allies to improve stability.",
+    "所选角色生存压力较大，候选角色能提供护盾，降低被击倒风险。": "The selected unit has survival pressure, and this candidate can shield allies to reduce knockout risk.",
+    "所选角色有爆发输出标签，候选角色能降低敌方防御，适合爆发前铺垫。": "The selected unit has a burst-damage tag, and this candidate can lower enemy DEF before the burst.",
+    "所选角色偏单体输出，候选角色的防御降低能帮助打 Boss 或精英敌人。": "The selected unit is single-target focused, and this candidate's DEF down helps against bosses or elite enemies.",
+    "候选角色位于 Special 位，不会占用前排输出位置，适合作为后排辅助。": "This candidate is in the Special slot, so they do not occupy a frontline Striker slot and work well as backline support.",
+    "两名角色都偏高费用，实际组队时需要注意 EX 技能循环。": "Both units are high-cost, so pay attention to EX skill cycling in practice.",
+    "两名角色没有明显冲突，但当前规则没有发现特别强的技能联动。": "There is no obvious conflict, but the current rules did not find a strong skill synergy.",
+    "候选角色与当前核心角色组合没有明显冲突。": "This candidate has no obvious conflict with the current core lineup.",
+    "队伍当前缺少“治疗”位，而且核心角色有自损或低血量退场风险；候选角色可以提供回复，优先保证普通推图稳定性。": "The team is missing a Healer, and the core unit has self-damage or low-HP retreat risk. This candidate provides healing to stabilize general stages.",
+    "它同样可以承担对应职责，可以先补齐队伍骨架。": "They can cover the same needed duty and help complete the team structure for now.",
+    "这是你当前 Box 中综合分数较高的可用队友，适合先作为过渡选择。": "This is one of the stronger available teammates in your current box and works as a temporary option.",
+}
+REASON_TRANSLATIONS_EN.update(
+    {TEAM_SLOT_HELP[role]: TEAM_SLOT_HELP_EN[role] for role in TEAM_SLOT_HELP}
+)
+REASON_TRANSLATIONS_EN.update(
+    {SUPPORT_TAG_REASON[tag]: SUPPORT_TAG_REASON_EN[tag] for tag in SUPPORT_TAG_REASON}
+)
 
 
-def label_role(role: str) -> str:
-    """返回角色定位的中文显示。"""
-    return ROLE_LABELS.get(role, role)
+def _english_label_from_chinese(label: str) -> str:
+    """把已生成的中文标签片段转成英文，供推荐理由翻译使用。"""
+    label = label.strip()
+    if label.startswith("还带有") and label.endswith("能力"):
+        ability = label.removeprefix("还带有").removesuffix("能力")
+        return f"also bringing {_english_list_from_chinese(ability)} utility"
+    reverse_maps = [
+        {value: TEAM_SLOT_LABELS_EN[key] for key, value in TEAM_SLOT_LABELS.items()},
+        {value: ROLE_LABELS_EN[key] for key, value in ROLE_LABELS.items()},
+        {value: TAG_LABELS_EN[key] for key, value in TAG_LABELS.items()},
+        {
+            "爆发特效增伤": "Explosive effectiveness buff",
+            "贯通特效增伤": "Piercing effectiveness buff",
+            "神秘特效增伤": "Mystic effectiveness buff",
+            "振动特效增伤": "Sonic effectiveness buff",
+            "进攻辅助": "offensive utility",
+            "自身也是输出定位": "also has a damage role",
+            "还能补一点输出或破防职责": "can also add damage or DEF-down utility",
+        },
+    ]
+    for mapping in reverse_maps:
+        if label in mapping:
+            return mapping[label]
+    return label
 
 
-def label_position(position: str) -> str:
+def _english_list_from_chinese(text: str) -> str:
+    """翻译用顿号分隔的中文标签列表。"""
+    return ", ".join(_english_label_from_chinese(part) for part in text.split("、") if part)
+
+
+def translate_reason(reason: str, lang: str = "zh") -> str:
+    """把推荐理由翻译成英文；中文模式保持原文。"""
+    if lang != "en":
+        return reason
+
+    if reason.startswith("与 **") and "： " not in reason and "：" in reason:
+        prefix, body = reason.split("：", 1)
+        character_name = prefix.removeprefix("与 ").strip()
+        return f"With {character_name}: {translate_reason(body, lang)}"
+
+    if reason in REASON_TRANSLATIONS_EN:
+        return REASON_TRANSLATIONS_EN[reason]
+
+    dynamic_patterns = [
+        (
+            r"候选角色能同时适配 (\d+) 个核心角色，适合放进这个组合里补功能。",
+            lambda m: f"This candidate works with {m.group(1)} core units at once, making them a good utility fit for this lineup.",
+        ),
+        (
+            r"EX 技能最高倍率约 ([\d.]+)%，有明显爆发伤害。",
+            lambda m: f"The EX skill reaches about {m.group(1)}% multiplier, showing clear burst damage.",
+        ),
+        (
+            r"EX 技能倍率约 ([\d.]+)%，偏向用 EX 打关键伤害。",
+            lambda m: f"The EX skill is about {m.group(1)}% multiplier, so this unit tends to use EX for key damage.",
+        ),
+        (
+            r"普通技能倍率约 ([\d.]+)%，小技能出伤占比不低。",
+            lambda m: f"The Normal skill is about {m.group(1)}% multiplier, so non-EX damage is meaningful.",
+        ),
+        (
+            r"候选角色能给队友提供(.+?)，这是技能文本里的对口增伤，能直接抬高该主 C 的输出。",
+            lambda m: f"This candidate provides {_english_label_from_chinese(m.group(1))} to allies, a direct matching damage buff from the skill text.",
+        ),
+        (
+            r"候选角色能提供(.+?)，适合让普攻/小技能的多段伤害持续受益。",
+            lambda m: f"This candidate provides {_english_label_from_chinese(m.group(1))}, helping repeated basic-attack or Normal-skill hits keep benefiting.",
+        ),
+        (
+            r"候选角色有约 ([\d.]+) 秒攻击力增益，适合覆盖 EX 爆发窗口。",
+            lambda m: f"This candidate provides about {m.group(1)} seconds of ATK buff, fitting an EX burst window.",
+        ),
+        (
+            r"候选角色有约 ([\d.]+) 秒攻击力增益，更适合覆盖普攻/小技能的持续输出时间。",
+            lambda m: f"This candidate provides about {m.group(1)} seconds of ATK buff, better covering sustained basic-attack or Normal-skill damage.",
+        ),
+        (
+            r"所选主 C 偏普攻/小技能输出，候选角色能提供约 ([\d.]+) 秒攻击速度提升，覆盖持续输出窗口。",
+            lambda m: f"The selected DPS leans on basic attacks or Normal skills, and this candidate provides about {m.group(1)} seconds of attack speed for the sustained window.",
+        ),
+        (
+            r"候选角色能在约 ([\d.]+) 秒内同时提高暴击率和暴击伤害，适合持续输出主 C 吃完整增益。",
+            lambda m: f"This candidate raises both crit rate and crit damage for about {m.group(1)} seconds, letting sustained DPS units use the full buff window.",
+        ),
+        (
+            r"两名角色都属于(.+?)，功能有一定重叠，因此略微扣分。",
+            lambda m: f"Both units are {_english_label_from_chinese(m.group(1))}, so their duties overlap a bit and the score is slightly reduced.",
+        ),
+        (
+            r"队伍当前缺少“(.+?)”位，候选角色可以补齐这个关键职责：(.+)",
+            lambda m: f"The team is missing a {_english_label_from_chinese(m.group(1))} slot. This candidate can cover that duty: {translate_reason(m.group(2), lang) if m.group(2) in REASON_TRANSLATIONS_EN else _english_label_from_chinese(m.group(2))}",
+        ),
+        (
+            r"队伍当前缺少“副 C”位；这里按半辅输出处理，(.+?)适合围绕 (.+?)提供(.+?)，并且(.+?)。",
+            lambda m: f"The team is missing a Sub DPS slot. Here, Sub DPS means a hybrid damage/support role; {m.group(1)} can provide {_english_list_from_chinese(m.group(3))} around {m.group(2)}, while {_english_label_from_chinese(m.group(4))}.",
+        ),
+        (
+            r"它同样可以承担(.+?)职责，可以先补齐队伍骨架。",
+            lambda m: f"They can also cover the {_english_label_from_chinese(m.group(1))} duty and help complete the team structure for now.",
+        ),
+        (
+            r"两者同属(.+?)定位，可以先承担相近的队伍职责。",
+            lambda m: f"Both units are {_english_label_from_chinese(m.group(1))} characters, so they can cover similar team duties for now.",
+        ),
+        (
+            r"两者都带有(.+?)标签，可以先覆盖一部分关键功能。",
+            lambda m: f"Both units share {_english_list_from_chinese(m.group(1))} tags, so the alternative can cover some key utility.",
+        ),
+    ]
+    for pattern, renderer in dynamic_patterns:
+        match = re.fullmatch(pattern, reason)
+        if match:
+            return renderer(match)
+
+    return reason
+
+
+def format_tags(tags: list[str], lang: str = "zh") -> list[str]:
+    """把内部标签 key 转成当前语言标签。"""
+    labels = TAG_LABELS_EN if lang == "en" else TAG_LABELS
+    return [labels.get(tag, tag) for tag in tags]
+
+
+def label_role(role: str, lang: str = "zh") -> str:
+    """返回角色定位的显示。"""
+    labels = ROLE_LABELS_EN if lang == "en" else ROLE_LABELS
+    return labels.get(role, role)
+
+
+def label_position(position: str, lang: str = "zh") -> str:
     """返回队伍位置的显示名称。"""
-    return POSITION_LABELS.get(position, position)
+    labels = POSITION_LABELS_EN if lang == "en" else POSITION_LABELS
+    return labels.get(position, position)
 
 
-def label_battle_position(battle_position: str) -> str:
-    """返回战斗站位的中文显示。"""
-    return BATTLE_POSITION_LABELS.get(battle_position, battle_position)
+def label_battle_position(battle_position: str, lang: str = "zh") -> str:
+    """返回战斗站位显示。"""
+    labels = BATTLE_POSITION_LABELS_EN if lang == "en" else BATTLE_POSITION_LABELS
+    return labels.get(battle_position, battle_position)
 
 
-def label_attack_type(attack_type: str) -> str:
-    """返回攻击类型的中文显示。"""
-    return ATTACK_TYPE_LABELS.get(attack_type, attack_type)
+def label_attack_type(attack_type: str, lang: str = "zh") -> str:
+    """返回攻击类型显示。"""
+    labels = ATTACK_TYPE_LABELS_EN if lang == "en" else ATTACK_TYPE_LABELS
+    return labels.get(attack_type, attack_type)
 
 
-def label_armor_type(armor_type: str) -> str:
-    """返回护甲类型的中文显示。"""
-    return ARMOR_TYPE_LABELS.get(armor_type, armor_type)
+def label_armor_type(armor_type: str, lang: str = "zh") -> str:
+    """返回护甲类型显示。"""
+    labels = ARMOR_TYPE_LABELS_EN if lang == "en" else ARMOR_TYPE_LABELS
+    return labels.get(armor_type, armor_type)
+
+
+def label_team_slot(slot_role: str, lang: str = "zh") -> str:
+    """返回队伍职责显示。"""
+    labels = TEAM_SLOT_LABELS_EN if lang == "en" else TEAM_SLOT_LABELS
+    return labels.get(slot_role, slot_role)
+
+
+def team_slot_help(slot_role: str, lang: str = "zh") -> str:
+    """返回队伍职责说明。"""
+    helps = TEAM_SLOT_HELP_EN if lang == "en" else TEAM_SLOT_HELP
+    return helps.get(slot_role, slot_role)

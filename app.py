@@ -21,14 +21,149 @@ from recommender import (
     label_damage_profile,
     label_position,
     label_role,
+    label_team_slot,
     load_characters,
     recommend_for_box,
     recommend_teammates_for_core,
+    translate_reason,
 )
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "characters.json"
+
+UI_TEXT = {
+    "zh": {
+        "page_title": "碧蓝档案推图配队推荐器",
+        "subtitle": "选择一个或多个核心角色，查看适合普通推图的新手向队友推荐和规则解释。",
+        "library_caption": "当前本地角色库共 {count} 名角色；名单来自 GameKee，结构化站位和技能资料来自 SchaleDB。",
+        "language": "语言 / Language",
+        "filters": "筛选",
+        "select_core": "选择核心角色",
+        "select_core_help": "可以选择 1 个或多个你想放进队伍的角色，系统会围绕这个组合推荐队友。",
+        "top_n": "每组推荐数量",
+        "my_box": "我的 Box",
+        "box_toggle": "只推荐我拥有的角色",
+        "import_box": "导入 Box JSON",
+        "owned_characters": "已拥有角色",
+        "owned_count": "已选择 {owned} / {total} 名角色",
+        "export_box": "导出 my_box.json",
+        "clear_box": "清空 Box",
+        "import_success": "已导入 {count} 名拥有角色",
+        "import_error": "导入失败：JSON 格式不正确",
+        "select_at_least_one": "请先在侧栏选择至少一个核心角色。",
+        "core_characters": "核心角色",
+        "box_recommendations": "你的 Box 可用推荐",
+        "box_empty": "先在侧栏“我的 Box”里选择你拥有的角色，再开启差异化推荐。",
+        "missing_core": "这些核心角色不在你的 Box 中：{names}；这里仍会围绕它们推荐你已拥有的队友。",
+        "no_owned_recs": "你的 Box 中暂时没有可推荐的队友。",
+        "ideal_recs": "查看全角色理想推荐",
+        "recommendations": "推荐队友",
+        "role_plan_title": "队伍职责检查",
+        "target_structure": "目标骨架",
+        "covered": "已覆盖",
+        "missing": "优先补位",
+        "none": "暂无",
+        "all_covered": "基础职责已覆盖，下面会继续按适配度推荐更多队友",
+        "slot_badge": "补位：{slot}",
+        "rank": "推荐 {rank}",
+        "score": "适配 {score} 分",
+        "overall_rating": "综合评分 {rating}",
+        "reason_title": "推荐理由",
+        "striker_title": "前排上场（Striker）",
+        "striker_caption": "会占用 4 个上场学生位，通常承担输出、坦克、治疗或场上辅助职责。",
+        "special_title": "后排支援（Special）",
+        "special_caption": "位于 2 个支援学生位，通常提供治疗、增益、减益、召唤或功能支援。",
+        "no_group_recs": "当前规则下这一组暂无推荐角色。",
+        "unknown_position": "位置待补充",
+        "missing_ideal_covered": "你的 Box 已覆盖当前理想推荐中的关键队友。",
+        "missing_ideal_title": "缺少的理想队友",
+        "box_substitutions": "Box 内替代建议",
+        "missing_substitution": "缺少 **{missing}** 时，可以先用 **{alternative}**：{reason}",
+        "selected_core_count": "已选择 {count} 个核心角色",
+        "rating_none": "暂无评分",
+        "ex_cost_missing": "待补充",
+        "skill_summary": "技能摘要",
+        "skill_note": "",
+        "stats_role": "定位",
+        "stats_position": "队伍位",
+        "stats_battle_position": "战斗站位",
+        "stats_attack": "攻击",
+        "stats_armor": "护甲",
+        "stats_ex_cost": "EX 费用",
+        "stats_damage_profile": "出伤类型",
+        "stats_rating": "GameKee 评分",
+        "box_note": "由碧蓝档案配队推荐器导出，可重新导入到我的 Box。",
+    },
+    "en": {
+        "page_title": "Blue Archive General Stage Team Recommender",
+        "subtitle": "Select one or more core units to get beginner-friendly teammate recommendations for general stages.",
+        "library_caption": "Local roster: {count} students. Names come from GameKee; structured positions and skill data come from SchaleDB.",
+        "language": "Language / 语言",
+        "filters": "Filters",
+        "select_core": "Core units",
+        "select_core_help": "Choose one or more units you want to build around. The app recommends teammates around that core.",
+        "top_n": "Recommendations per group",
+        "my_box": "My Box",
+        "box_toggle": "Only recommend owned units",
+        "import_box": "Import Box JSON",
+        "owned_characters": "Owned units",
+        "owned_count": "Selected {owned} / {total} units",
+        "export_box": "Export my_box.json",
+        "clear_box": "Clear Box",
+        "import_success": "Imported {count} owned units",
+        "import_error": "Import failed: invalid JSON",
+        "select_at_least_one": "Please select at least one core unit in the sidebar.",
+        "core_characters": "Core Units",
+        "box_recommendations": "Recommendations From Your Box",
+        "box_empty": "Select owned units in the sidebar's My Box section before enabling box-based recommendations.",
+        "missing_core": "These core units are not in your Box: {names}. The app will still recommend owned teammates around them.",
+        "no_owned_recs": "No usable recommendations were found in your Box yet.",
+        "ideal_recs": "View ideal recommendations from all units",
+        "recommendations": "Recommended Teammates",
+        "role_plan_title": "Team Role Check",
+        "target_structure": "Target structure",
+        "covered": "Covered",
+        "missing": "Priority gaps",
+        "none": "None",
+        "all_covered": "Core duties are covered; more teammates are ranked by synergy below.",
+        "slot_badge": "Fills: {slot}",
+        "rank": "Recommendation {rank}",
+        "score": "Synergy {score}",
+        "overall_rating": "Overall rating {rating}",
+        "reason_title": "Why recommended",
+        "striker_title": "Striker",
+        "striker_caption": "Uses one of the 4 active field slots, usually for damage, tanking, healing, or field support.",
+        "special_title": "Special",
+        "special_caption": "Uses one of the 2 backline support slots, usually for healing, buffs, debuffs, summons, or utility.",
+        "no_group_recs": "No recommendations in this group under the current rules.",
+        "unknown_position": "Position TBD",
+        "missing_ideal_covered": "Your Box already covers the key units from the current ideal recommendations.",
+        "missing_ideal_title": "Missing ideal teammates",
+        "box_substitutions": "Box substitutions",
+        "missing_substitution": "If you are missing **{missing}**, you can use **{alternative}** for now: {reason}",
+        "selected_core_count": "{count} core units selected",
+        "rating_none": "No rating",
+        "ex_cost_missing": "TBD",
+        "skill_summary": "Skill Summary",
+        "skill_note": "Skill text is currently shown in Chinese because the local dataset uses Chinese skill summaries.",
+        "stats_role": "Role",
+        "stats_position": "Squad slot",
+        "stats_battle_position": "Battle position",
+        "stats_attack": "Attack type",
+        "stats_armor": "Armor type",
+        "stats_ex_cost": "EX cost",
+        "stats_damage_profile": "Damage profile",
+        "stats_rating": "GameKee rating",
+        "box_note": "Exported by the Blue Archive team recommender. You can import it back into My Box.",
+    },
+}
+
+
+def ui(lang: str, key: str, **kwargs: object) -> str:
+    """读取当前语言的界面文案。"""
+    text = UI_TEXT.get(lang, UI_TEXT["zh"]).get(key, UI_TEXT["zh"].get(key, key))
+    return text.format(**kwargs)
 
 
 @st.cache_data
@@ -68,41 +203,41 @@ def normalize_box_names(raw_data: object, valid_names: list[str]) -> list[str]:
     return [name for name in valid_names if name in set(imported_names) & valid_name_set]
 
 
-def build_box_json(owned_names: list[str]) -> bytes:
+def build_box_json(owned_names: list[str], lang: str) -> bytes:
     """生成可下载的 Box JSON 文件内容。"""
     payload = {
         "owned_names": owned_names,
-        "note": "由碧蓝档案配队推荐器导出，可重新导入到我的 Box。",
+        "note": ui(lang, "box_note"),
     }
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
-def render_tag_list(tags: list[str]) -> None:
+def render_tag_list(tags: list[str], lang: str) -> None:
     """用简单的胶囊标签展示角色技能关键词。"""
-    tag_html = "".join(f"<span class='tag'>{tag}</span>" for tag in format_tags(tags))
+    tag_html = "".join(f"<span class='tag'>{tag}</span>" for tag in format_tags(tags, lang))
     st.markdown(f"<div class='tag-row'>{tag_html}</div>", unsafe_allow_html=True)
 
 
-def format_gamekee_rating(character: dict) -> str:
+def format_gamekee_rating(character: dict, lang: str) -> str:
     """返回 GameKee 角色评测里的综合评分。"""
     rating = (character.get("ratings") or {}).get("gamekee_overall") or {}
-    return rating.get("overall") or "暂无评分"
+    return rating.get("overall") or ui(lang, "rating_none")
 
 
-def render_character_panel(character: dict) -> None:
+def render_character_panel(character: dict, lang: str) -> None:
     """展示当前选择角色的核心信息。"""
     st.markdown(f"### {character['name']}")
 
-    ex_cost = character.get("ex_cost") or "待补充"
+    ex_cost = character.get("ex_cost") or ui(lang, "ex_cost_missing")
     stats = [
-        ("定位", label_role(character["role"])),
-        ("队伍位", label_position(character["position"])),
-        ("战斗站位", label_battle_position(character.get("battle_position", "unknown"))),
-        ("攻击", label_attack_type(character["attack_type"])),
-        ("护甲", label_armor_type(character["armor_type"])),
-        ("EX 费用", str(ex_cost)),
-        ("出伤类型", label_damage_profile(character)),
-        ("GameKee 评分", format_gamekee_rating(character)),
+        (ui(lang, "stats_role"), label_role(character["role"], lang)),
+        (ui(lang, "stats_position"), label_position(character["position"], lang)),
+        (ui(lang, "stats_battle_position"), label_battle_position(character.get("battle_position", "unknown"), lang)),
+        (ui(lang, "stats_attack"), label_attack_type(character["attack_type"], lang)),
+        (ui(lang, "stats_armor"), label_armor_type(character["armor_type"], lang)),
+        (ui(lang, "stats_ex_cost"), str(ex_cost)),
+        (ui(lang, "stats_damage_profile"), label_damage_profile(character, lang)),
+        (ui(lang, "stats_rating"), format_gamekee_rating(character, lang)),
     ]
     for row_start in range(0, len(stats), 2):
         columns = st.columns(2)
@@ -119,55 +254,60 @@ def render_character_panel(character: dict) -> None:
             source.get("school") or "",
         ]
         st.caption(" / ".join(part for part in source_parts if part))
-    render_tag_list(character["tags"])
+    render_tag_list(character["tags"], lang)
 
-    with st.expander("技能摘要", expanded=False):
+    with st.expander(ui(lang, "skill_summary"), expanded=False):
+        if ui(lang, "skill_note"):
+            st.caption(ui(lang, "skill_note"))
         for skill_name, description in character["skills"].items():
             st.markdown(f"**{skill_name.upper()}**：{description}")
 
 
-def render_core_character_panels(selected_characters: list[dict]) -> None:
+def render_core_character_panels(selected_characters: list[dict], lang: str) -> None:
     """展示一个或多个玩家想围绕配队的核心角色。"""
     if len(selected_characters) == 1:
-        render_character_panel(selected_characters[0])
+        render_character_panel(selected_characters[0], lang)
         return
 
-    st.caption(f"已选择 {len(selected_characters)} 个核心角色")
+    st.caption(ui(lang, "selected_core_count", count=len(selected_characters)))
     for index, character in enumerate(selected_characters):
         with st.expander(character["name"], expanded=index == 0):
-            render_character_panel(character)
+            render_character_panel(character, lang)
 
 
-def render_team_role_plan(role_plan: dict) -> None:
+def render_team_role_plan(role_plan: dict, lang: str) -> None:
     """展示当前核心角色已经覆盖和仍需要补齐的队伍职责。"""
-    target_labels = "、".join(slot["label"] for slot in role_plan["target"])
-    covered_labels = "、".join(slot["label"] for slot in role_plan["covered"]) or "暂无"
-    missing_labels = "、".join(slot["label"] for slot in role_plan["missing"])
-    missing_text = missing_labels or "基础职责已覆盖，下面会继续按适配度推荐更多队友"
+    separator = "、" if lang == "zh" else ", "
+    colon = "：" if lang == "zh" else ": "
+    target_labels = separator.join(label_team_slot(slot["role"], lang) for slot in role_plan["target"])
+    covered_labels = separator.join(label_team_slot(slot["role"], lang) for slot in role_plan["covered"]) or ui(lang, "none")
+    missing_labels = separator.join(label_team_slot(slot["role"], lang) for slot in role_plan["missing"])
+    missing_text = missing_labels or ui(lang, "all_covered")
 
     st.markdown(
         f"""
         <div class="role-plan">
-            <div class="role-plan-title">队伍职责检查</div>
-            <div>目标骨架：{target_labels}</div>
-            <div>已覆盖：{covered_labels}</div>
-            <div>优先补位：{missing_text}</div>
+            <div class="role-plan-title">{ui(lang, "role_plan_title")}</div>
+            <div>{ui(lang, "target_structure")}{colon}{target_labels}</div>
+            <div>{ui(lang, "covered")}{colon}{covered_labels}</div>
+            <div>{ui(lang, "missing")}{colon}{missing_text}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def render_recommendation_card(item: dict, rank: int) -> None:
+def render_recommendation_card(item: dict, rank: int, lang: str) -> None:
     """展示一个推荐队友卡片。"""
     character = item["character"]
     score = item["score"]
     reasons = item["reasons"]
     slot_badge = ""
-    if item.get("slot_label"):
-        slot_badge = f"<span class='slot-badge'>补位：{item['slot_label']}</span>"
-    rank_row = f'<div class="rank-row"><span class="rank">推荐 {rank}</span>{slot_badge}</div>'
-    ex_cost = character.get("ex_cost") or "待补充"
+    if item.get("slot_role") or item.get("slot_label"):
+        slot_label = label_team_slot(item.get("slot_role", ""), lang) if item.get("slot_role") else item["slot_label"]
+        slot_badge = f"<span class='slot-badge'>{ui(lang, 'slot_badge', slot=slot_label)}</span>"
+    rank_row = f'<div class="rank-row"><span class="rank">{ui(lang, "rank", rank=rank)}</span>{slot_badge}</div>'
+    ex_cost = character.get("ex_cost") or ui(lang, "ex_cost_missing")
 
     st.markdown(
         "\n".join(
@@ -178,15 +318,15 @@ def render_recommendation_card(item: dict, rank: int) -> None:
                 rank_row,
                 f"<h3>{character['name']}</h3>",
                 "</div>",
-                f'<div class="score">适配 {score} 分</div>',
+                f'<div class="score">{ui(lang, "score", score=score)}</div>',
                 "</div>",
                 '<div class="meta">',
-                f"<span>{label_role(character['role'])}</span>",
-                f"<span>{label_position(character['position'])}</span>",
-                f"<span>{label_battle_position(character.get('battle_position', 'unknown'))}</span>",
-                f"<span>{label_attack_type(character['attack_type'])}</span>",
+                f"<span>{label_role(character['role'], lang)}</span>",
+                f"<span>{label_position(character['position'], lang)}</span>",
+                f"<span>{label_battle_position(character.get('battle_position', 'unknown'), lang)}</span>",
+                f"<span>{label_attack_type(character['attack_type'], lang)}</span>",
                 f"<span>EX {ex_cost}</span>",
-                f"<span>综合评分 {format_gamekee_rating(character)}</span>",
+                f"<span>{ui(lang, 'overall_rating', rating=format_gamekee_rating(character, lang))}</span>",
                 "</div>",
                 "</section>",
             ]
@@ -194,10 +334,10 @@ def render_recommendation_card(item: dict, rank: int) -> None:
         unsafe_allow_html=True,
     )
 
-    render_tag_list(character["tags"])
-    st.markdown("**推荐理由**")
+    render_tag_list(character["tags"], lang)
+    st.markdown(f"**{ui(lang, 'reason_title')}**")
     for reason in reasons[:5]:
-        st.markdown(f"- {reason}")
+        st.markdown(f"- {translate_reason(reason, lang)}")
 
 
 def split_recommendations_by_position(
@@ -215,12 +355,13 @@ def split_recommendations_by_position(
 def render_recommendation_groups(
     recommendations: list[dict],
     limit_per_group: int,
+    lang: str,
 ) -> None:
     """分前排上场位和后排支援位展示推荐结果。"""
     groups = split_recommendations_by_position(recommendations)
     group_configs = [
-        ("striker", "前排上场（Striker）", "会占用 4 个上场学生位，通常承担输出、坦克、治疗或场上辅助职责。"),
-        ("special", "后排支援（Special）", "位于 2 个支援学生位，通常提供治疗、增益、减益、召唤或功能支援。"),
+        ("striker", ui(lang, "striker_title"), ui(lang, "striker_caption")),
+        ("special", ui(lang, "special_title"), ui(lang, "special_caption")),
     ]
 
     for group_key, title, caption in group_configs:
@@ -228,24 +369,24 @@ def render_recommendation_groups(
         st.caption(caption)
         items = groups.get(group_key, [])[:limit_per_group]
         if not items:
-            st.info("当前规则下这一组暂无推荐角色。")
+            st.info(ui(lang, "no_group_recs"))
             continue
         for index, item in enumerate(items, start=1):
-            render_recommendation_card(item, index)
+            render_recommendation_card(item, index, lang)
 
     unknown_items = groups.get("unknown", [])[:limit_per_group]
     if unknown_items:
-        st.markdown("<div class='group-title'>位置待补充</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='group-title'>{ui(lang, 'unknown_position')}</div>", unsafe_allow_html=True)
         for index, item in enumerate(unknown_items, start=1):
-            render_recommendation_card(item, index)
+            render_recommendation_card(item, index, lang)
 
 
-def render_compact_grouped_list(recommendations: list[dict]) -> None:
+def render_compact_grouped_list(recommendations: list[dict], lang: str) -> None:
     """在折叠区内用紧凑列表展示分组后的理想推荐。"""
     groups = split_recommendations_by_position(recommendations)
     for group_key, title in [
-        ("striker", "前排上场（Striker）"),
-        ("special", "后排支援（Special）"),
+        ("striker", ui(lang, "striker_title")),
+        ("special", ui(lang, "special_title")),
     ]:
         items = groups.get(group_key, [])
         if not items:
@@ -253,47 +394,71 @@ def render_compact_grouped_list(recommendations: list[dict]) -> None:
         st.markdown(f"**{title}**")
         for index, item in enumerate(items, start=1):
             character = item["character"]
-            st.markdown(
-                f"{index}. **{character['name']}** "
-                f"（{label_role(character['role'])}，"
-                f"{label_battle_position(character.get('battle_position', 'unknown'))}，"
-                f"综合评分 {format_gamekee_rating(character)}，"
-                f"{item['score']} 分）"
-            )
+            if lang == "en":
+                detail = (
+                    f"({label_role(character['role'], lang)}, "
+                    f"{label_battle_position(character.get('battle_position', 'unknown'), lang)}, "
+                    f"{ui(lang, 'overall_rating', rating=format_gamekee_rating(character, lang))}, "
+                    f"{ui(lang, 'score', score=item['score'])})"
+                )
+            else:
+                detail = (
+                    f"（{label_role(character['role'], lang)}，"
+                    f"{label_battle_position(character.get('battle_position', 'unknown'), lang)}，"
+                    f"综合评分 {format_gamekee_rating(character, lang)}，"
+                    f"{item['score']} 分）"
+                )
+            st.markdown(f"{index}. **{character['name']}** {detail}")
 
 
-def render_missing_summary(box_result: dict) -> None:
+def render_missing_summary(box_result: dict, lang: str) -> None:
     """展示理想推荐里玩家当前缺少的角色。"""
     missing = box_result["missing"]
     substitutions = box_result["substitutions"]
 
     if not missing:
-        st.success("你的 Box 已覆盖当前理想推荐中的关键队友。")
+        st.success(ui(lang, "missing_ideal_covered"))
         return
 
-    st.markdown("**缺少的理想队友**")
-    missing_names = [
-        f"{item['character']['name']}（"
-        f"{'补' + item['slot_label'] + '，' if item.get('slot_label') else ''}"
-        f"{label_role(item['character']['role'])}，{item['score']} 分）"
-        for item in missing
-    ]
-    st.markdown("、".join(missing_names))
+    st.markdown(f"**{ui(lang, 'missing_ideal_title')}**")
+    missing_names = []
+    for item in missing:
+        slot_text = ""
+        if item.get("slot_role") or item.get("slot_label"):
+            slot_label = label_team_slot(item.get("slot_role", ""), lang) if item.get("slot_role") else item["slot_label"]
+            slot_text = f"{ui(lang, 'slot_badge', slot=slot_label)}, " if lang == "en" else f"补{slot_label}，"
+        if lang == "en":
+            missing_names.append(
+                f"{item['character']['name']} ({slot_text}"
+                f"{label_role(item['character']['role'], lang)}, {ui(lang, 'score', score=item['score'])})"
+            )
+        else:
+            missing_names.append(
+                f"{item['character']['name']}（"
+                f"{slot_text}{label_role(item['character']['role'], lang)}，{item['score']} 分）"
+            )
+    st.markdown(("、" if lang == "zh" else "; ").join(missing_names))
 
     if substitutions:
-        st.markdown("**Box 内替代建议**")
+        st.markdown(f"**{ui(lang, 'box_substitutions')}**")
         for item in substitutions:
             missing_character = item["missing"]["character"]
             alternative_character = item["alternative"]["character"]
             st.markdown(
-                f"- 缺少 **{missing_character['name']}** 时，可以先用 "
-                f"**{alternative_character['name']}**：{item['reason']}"
+                "- "
+                + ui(
+                    lang,
+                    "missing_substitution",
+                    missing=missing_character["name"],
+                    alternative=alternative_character["name"],
+                    reason=translate_reason(item["reason"], lang),
+                )
             )
 
 
 def main() -> None:
     st.set_page_config(
-        page_title="碧蓝档案推图配队推荐器",
+        page_title="Blue Archive Team Recommender / 碧蓝档案推图配队推荐器",
         page_icon="🎯",
         layout="wide",
     )
@@ -427,17 +592,25 @@ def main() -> None:
     if "owned_names" not in st.session_state:
         st.session_state["owned_names"] = []
 
-    st.markdown("<div class='app-title'>碧蓝档案推图配队推荐器</div>", unsafe_allow_html=True)
+    with st.sidebar:
+        language_choice = st.selectbox(
+            "语言 / Language",
+            ["中文", "English"],
+            index=0,
+        )
+    lang = "en" if language_choice == "English" else "zh"
+
+    st.markdown(f"<div class='app-title'>{ui(lang, 'page_title')}</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='app-subtitle'>选择一个或多个核心角色，查看适合普通推图的新手向队友推荐和规则解释。</div>",
+        f"<div class='app-subtitle'>{ui(lang, 'subtitle')}</div>",
         unsafe_allow_html=True,
     )
     st.caption(
-        f"当前本地角色库共 {len(characters)} 名角色；名单来自 GameKee，结构化站位和技能资料来自 SchaleDB。"
+        ui(lang, "library_caption", count=len(characters))
     )
 
     with st.sidebar:
-        st.header("筛选")
+        st.header(ui(lang, "filters"))
         if "selected_names" not in st.session_state:
             st.session_state["selected_names"] = [character_names[0]]
         else:
@@ -448,18 +621,18 @@ def main() -> None:
             ]
 
         selected_names = st.multiselect(
-            "选择核心角色",
+            ui(lang, "select_core"),
             character_names,
             key="selected_names",
-            help="可以选择 1 个或多个你想放进队伍的角色，系统会围绕这个组合推荐队友。",
+            help=ui(lang, "select_core_help"),
         )
-        top_n = st.slider("每组推荐数量", min_value=3, max_value=8, value=5)
+        top_n = st.slider(ui(lang, "top_n"), min_value=3, max_value=8, value=5)
 
         st.divider()
-        st.header("我的 Box")
-        use_box_mode = st.toggle("只推荐我拥有的角色", value=False)
+        st.header(ui(lang, "my_box"))
+        use_box_mode = st.toggle(ui(lang, "box_toggle"), value=False)
 
-        uploaded_box = st.file_uploader("导入 Box JSON", type=["json"])
+        uploaded_box = st.file_uploader(ui(lang, "import_box"), type=["json"])
         if uploaded_box is not None:
             uploaded_bytes = uploaded_box.getvalue()
             signature = hashlib.sha256(uploaded_bytes).hexdigest()
@@ -469,27 +642,27 @@ def main() -> None:
                     imported_names = normalize_box_names(imported_data, character_names)
                     st.session_state["owned_names"] = imported_names
                     st.session_state["box_import_signature"] = signature
-                    st.success(f"已导入 {len(imported_names)} 名拥有角色")
+                    st.success(ui(lang, "import_success", count=len(imported_names)))
                 except json.JSONDecodeError:
-                    st.error("导入失败：JSON 格式不正确")
+                    st.error(ui(lang, "import_error"))
 
         owned_names = st.multiselect(
-            "已拥有角色",
+            ui(lang, "owned_characters"),
             character_names,
             key="owned_names",
         )
-        st.caption(f"已选择 {len(owned_names)} / {len(character_names)} 名角色")
+        st.caption(ui(lang, "owned_count", owned=len(owned_names), total=len(character_names)))
         st.download_button(
-            "导出 my_box.json",
-            data=build_box_json(owned_names),
+            ui(lang, "export_box"),
+            data=build_box_json(owned_names, lang),
             file_name="my_box.json",
             mime="application/json",
             disabled=not owned_names,
         )
-        st.button("清空 Box", on_click=clear_owned_box, disabled=not owned_names)
+        st.button(ui(lang, "clear_box"), on_click=clear_owned_box, disabled=not owned_names)
 
     if not selected_names:
-        st.info("请先在侧栏选择至少一个核心角色。")
+        st.info(ui(lang, "select_at_least_one"))
         return
 
     character_by_name = {character["name"]: character for character in characters}
@@ -499,16 +672,16 @@ def main() -> None:
     left, right = st.columns([0.95, 1.35], gap="large")
 
     with left:
-        st.subheader("核心角色")
-        render_core_character_panels(selected_characters)
+        st.subheader(ui(lang, "core_characters"))
+        render_core_character_panels(selected_characters, lang)
 
     with right:
         if use_box_mode:
-            st.subheader("你的 Box 可用推荐")
-            render_team_role_plan(role_plan)
+            st.subheader(ui(lang, "box_recommendations"))
+            render_team_role_plan(role_plan, lang)
             owned_name_set = set(owned_names)
             if not owned_names:
-                st.info("先在侧栏“我的 Box”里选择你拥有的角色，再开启差异化推荐。")
+                st.info(ui(lang, "box_empty"))
                 return
 
             missing_core_names = [
@@ -516,8 +689,11 @@ def main() -> None:
             ]
             if missing_core_names:
                 st.warning(
-                    "这些核心角色不在你的 Box 中："
-                    f"{'、'.join(missing_core_names)}；这里仍会围绕它们推荐你已拥有的队友。"
+                    ui(
+                        lang,
+                        "missing_core",
+                        names=("、" if lang == "zh" else ", ").join(missing_core_names),
+                    )
                 )
 
             box_result = recommend_for_box(
@@ -534,29 +710,29 @@ def main() -> None:
             )
 
             if owned_recommendations:
-                render_recommendation_groups(owned_recommendations, top_n)
+                render_recommendation_groups(owned_recommendations, top_n, lang)
             else:
-                st.warning("你的 Box 中暂时没有可推荐的队友。")
+                st.warning(ui(lang, "no_owned_recs"))
 
             st.divider()
-            render_missing_summary(box_result)
+            render_missing_summary(box_result, lang)
 
-            with st.expander("查看全角色理想推荐", expanded=False):
+            with st.expander(ui(lang, "ideal_recs"), expanded=False):
                 all_recommendations = recommend_teammates_for_core(
                     selected_names,
                     characters,
                     top_n=len(characters),
                 )
-                render_compact_grouped_list(all_recommendations[: top_n * 2])
+                render_compact_grouped_list(all_recommendations[: top_n * 2], lang)
         else:
-            st.subheader("推荐队友")
-            render_team_role_plan(role_plan)
+            st.subheader(ui(lang, "recommendations"))
+            render_team_role_plan(role_plan, lang)
             recommendations = recommend_teammates_for_core(
                 selected_names,
                 characters,
                 top_n=len(characters),
             )
-            render_recommendation_groups(recommendations, top_n)
+            render_recommendation_groups(recommendations, top_n, lang)
 
 
 if __name__ == "__main__":
